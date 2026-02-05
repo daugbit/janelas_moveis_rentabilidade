@@ -21,6 +21,8 @@ def obter_dados_ativo(ticker, data_inicio, data_fim):
         print(f"  Tentando baixar dados de {ticker}...")
         
         tentativas = 3
+        ultimo_erro = None
+        
         for tentativa in range(tentativas):
             try:
                 dados = yf.download(
@@ -28,37 +30,50 @@ def obter_dados_ativo(ticker, data_inicio, data_fim):
                     start=data_inicio, 
                     end=data_fim, 
                     progress=False,
-                    timeout=30  # Aumentar timeout
+                    timeout=30
                 )
                 
                 if not dados.empty:
                     print(f"  ✓ Dados obtidos com sucesso!")
+                    print(f"    Período: {dados.index[0].strftime('%d/%m/%Y')} a {dados.index[-1].strftime('%d/%m/%Y')}")
+                    print(f"    Total de {len(dados)} dias de dados")
                     return dados
                     
             except Exception as e:
+                ultimo_erro = str(e)
                 if tentativa < tentativas - 1:
-                    print(f"  Tentativa {tentativa + 1} falhou, tentando novamente...")
+                    print(f"  ⚠️  Tentativa {tentativa + 1} falhou, tentando novamente...")
+                    import time
+                    time.sleep(2)  # Espera 2 segundos antes de tentar novamente
                     continue
                 else:
-                    raise e
+                    break
         
         # Se chegou aqui, não conseguiu dados
         raise ValueError(f"Ticker '{ticker}' não encontrado ou sem dados disponíveis")
         
     except Exception as e:
         erro_msg = str(e)
-        if "ConnectionError" in erro_msg or "Failed to connect" in erro_msg:
+        
+        # Mensagens de erro mais específicas
+        if "404" in erro_msg or "Not Found" in erro_msg or "delisted" in erro_msg:
             raise ValueError(
-                f"Erro de conexão ao buscar '{ticker}'. "
-                "Verifique sua conexão com a internet ou tente novamente mais tarde."
+                f"❌ Ticker '{ticker}' não encontrado no Yahoo Finance.\n"
+                f"   Possíveis causas:\n"
+                f"   • O ticker foi removido ou renomeado\n"
+                f"   • Use '^BVSP' (com acento circunflexo) para Ibovespa\n"
+                f"   • Para ações BR, adicione .SA (ex: PETR4.SA)\n"
+                f"   • Tente novamente em alguns minutos (pode ser instabilidade temporária)"
             )
-        elif dados.empty:
+        elif "ConnectionError" in erro_msg or "Failed to connect" in erro_msg or "timeout" in erro_msg.lower():
             raise ValueError(
-                f"Ticker '{ticker}' não encontrado no Yahoo Finance. "
-                "Verifique se o ticker está correto."
+                f"❌ Erro de conexão ao buscar '{ticker}'.\n"
+                f"   • Verifique sua conexão com a internet\n"
+                f"   • O Yahoo Finance pode estar temporariamente indisponível\n"
+                f"   • Tente novamente em alguns minutos"
             )
         else:
-            raise ValueError(f"Erro ao obter dados para '{ticker}': {erro_msg}")
+            raise ValueError(f"❌ Erro ao obter dados para '{ticker}': {erro_msg}")
 
 def converter_usd_para_brl(dados_usd, data_inicio, data_fim):
     """
@@ -306,7 +321,7 @@ def encontrar_periodos_superacao(var_ativo1, var_ativo2):
     
     return periodos
 
-def plotar_comparacao(ticker1, ticker2, data_inicio, data_fim):
+def plotar_comparacao(ticker1, ticker2, data_inicio, data_fim, autoria=""):
     """
     Plota gráfico comparativo de dois ativos
     
@@ -315,6 +330,7 @@ def plotar_comparacao(ticker1, ticker2, data_inicio, data_fim):
         ticker2: Ticker do segundo ativo
         data_inicio: Data inicial (datetime)
         data_fim: Data final (datetime)
+        autoria: Nome do autor do gráfico (opcional)
     """
     print(f"Obtendo dados para {ticker1}...")
     dados1 = obter_dados_ativo(ticker1, data_inicio, data_fim)
@@ -391,6 +407,13 @@ def plotar_comparacao(ticker1, ticker2, data_inicio, data_fim):
                 verticalalignment='bottom', horizontalalignment='right',
                 bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.6),
                 style='italic')
+    
+    # Adicionar autoria se fornecida
+    if autoria:
+        ax.text(0.02, 0.02, f'Elaborado por: {autoria}', 
+                transform=ax.transAxes, fontsize=9,
+                verticalalignment='bottom', horizontalalignment='left',
+                style='italic', color='gray')
     
     # Configurações do gráfico
     ax.set_xlabel('Data', fontsize=12)
@@ -482,7 +505,7 @@ def plotar_comparacao(ticker1, ticker2, data_inicio, data_fim):
     print(f"   Diferença: {diferenca:.2f} pontos percentuais")
     print(f"{'='*70}\n")
 
-def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
+def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses, autoria=""):
     """
     Plota análise de janelas móveis comparando dois ativos
     
@@ -491,16 +514,24 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
         ticker2: Ticker do segundo ativo
         periodo_anos: Período total de análise em anos
         janela_meses: Tamanho da janela em meses
+        autoria: Nome do autor do gráfico (opcional)
     """
-    # Calcular datas
+    # Calcular datas - adicionar margem extra para compensar a janela móvel
+    # Se queremos analisar 10 anos com janela de 24 meses, precisamos de dados de ~12 anos
+    margem_extra_anos = (janela_meses / 12)  # Converter meses em anos
+    
     data_fim = datetime.now()
-    data_inicio = data_fim - timedelta(days=periodo_anos*365)
+    data_inicio = data_fim - timedelta(days=int((periodo_anos + margem_extra_anos) * 365))
+    
+    # Datas que queremos mostrar no gráfico (período solicitado pelo usuário)
+    data_inicio_display = data_fim - timedelta(days=periodo_anos * 365)
     
     print(f"\n{'='*70}")
     print(f"🔍 ANÁLISE DE JANELAS MÓVEIS")
     print(f"{'='*70}")
-    print(f"Período total: {periodo_anos} anos")
+    print(f"Período solicitado: {periodo_anos} anos")
     print(f"Tamanho da janela: {janela_meses} meses")
+    print(f"Buscando dados extras para cálculo das janelas...")
     print(f"{'='*70}\n")
     
     print(f"Obtendo dados para {ticker1}...")
@@ -538,13 +569,19 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
         print(f"   Tente usar um período maior ou uma janela menor")
         return
     
-    print("Identificando janelas de superação...")
-    janelas = encontrar_janelas_superacao(retornos1, retornos2, janela_meses)
+    # Filtrar retornos para mostrar apenas o período solicitado
+    retornos1_filtrado = retornos1[retornos1.index >= data_inicio_display]
+    retornos2_filtrado = retornos2[retornos2.index >= data_inicio_display]
     
-    # Alinhar retornos para plotagem
+    print(f"  ✓ Filtrando para período solicitado: {len(retornos1_filtrado)} janelas exibidas")
+    
+    print("Identificando janelas de superação...")
+    janelas = encontrar_janelas_superacao(retornos1_filtrado, retornos2_filtrado, janela_meses)
+    
+    # Alinhar retornos para plotagem - usar os retornos filtrados
     retornos_alinhados = pd.DataFrame({
-        'ret1': retornos1,
-        'ret2': retornos2
+        'ret1': retornos1_filtrado,
+        'ret2': retornos2_filtrado
     }).dropna()
     
     # Criar figura com 3 subplots
@@ -558,10 +595,10 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
     # Plotar apenas os dados alinhados
     ax1.plot(retornos_alinhados.index, retornos_alinhados['ret1'], 
              label=f'{ticker1_display}', 
-             linewidth=2.5, color='#ff7f0e', alpha=0.8)
+             linewidth=2.5, color='#1f77b4', alpha=0.8)
     ax1.plot(retornos_alinhados.index, retornos_alinhados['ret2'], 
              label=f'{ticker2_display}', 
-             linewidth=2.5, color='#1f77b4', alpha=0.8)
+             linewidth=2.5, color='#ff7f0e', alpha=0.8)
     
     # Preencher área entre as linhas usando dados alinhados
     if not retornos_alinhados.empty:
@@ -588,9 +625,9 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
     ax1.grid(True, alpha=0.3, linestyle='--')
     ax1.axhline(y=0, color='black', linestyle='-', linewidth=1, alpha=0.5)
     
-    # Adicionar estatísticas no gráfico
-    ret1_media = retornos1.mean()
-    ret2_media = retornos2.mean()
+    # Adicionar estatísticas no gráfico - usando dados filtrados
+    ret1_media = retornos_alinhados['ret1'].mean()
+    ret2_media = retornos_alinhados['ret2'].mean()
     stats_text = f'Retorno médio (janela {janela_meses}m):\n{ticker1_display}: {ret1_media:.1f}%  |  {ticker2_display}: {ret2_media:.1f}%'
     ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, 
             fontsize=10, verticalalignment='top',
@@ -643,8 +680,8 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
                     bbox=dict(boxstyle='round,pad=0.4', facecolor='lightgreen', 
                              edgecolor='darkgreen', alpha=0.9))
         
-        # Legenda
-        ax3.text(0.5, -0.05, f'● = Janela onde {ticker2_display} superou {ticker1_display}', 
+        # Legenda - movida para cima para não sobrepor o eixo
+        ax3.text(0.5, 0.1, f'● = Janela onde {ticker2_display} superou {ticker1_display}', 
                 transform=ax3.transAxes, horizontalalignment='center',
                 fontsize=10, style='italic')
     else:
@@ -657,6 +694,12 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
     ax3.spines['top'].set_visible(False)
     ax3.spines['right'].set_visible(False)
     ax3.spines['left'].set_visible(False)
+    
+    # Adicionar autoria se fornecida (no canto inferior esquerdo da figura)
+    if autoria:
+        fig.text(0.02, 0.01, f'Elaborado por: {autoria}', 
+                fontsize=9, style='italic', color='gray',
+                verticalalignment='bottom', horizontalalignment='left')
     
     plt.tight_layout()
     
@@ -699,9 +742,9 @@ def plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses):
     print(f"{'='*70}")
     print(f"\n📊 RESUMO DA ANÁLISE")
     print(f"{'-'*70}")
-    print(f"Período analisado: {periodo_anos} anos")
+    print(f"Período analisado: {periodo_anos} anos ({data_inicio_display.strftime('%d/%m/%Y')} a {data_fim.strftime('%d/%m/%Y')})")
     print(f"Tamanho da janela: {janela_meses} meses")
-    print(f"\nTotal de janelas analisadas: {len(retornos1)}")
+    print(f"\nTotal de janelas analisadas: {len(retornos_alinhados)}")
     print(f"\n🏆 JANELAS DE SUPERAÇÃO")
     print(f"{'-'*70}")
     
@@ -742,6 +785,12 @@ def main():
     print("="*70)
     print("           COMPARADOR DE ATIVOS FINANCEIROS")
     print("="*70)
+    
+    # Solicitar autoria (opcional)
+    print("\n📝 Informações do gráfico (opcional):")
+    autoria = input("Gráfico elaborado por (Enter para pular): ").strip()
+    if autoria:
+        print(f"   ✓ Autoria: {autoria}")
     
     # Menu principal
     print("\n📊 ESCOLHA O TIPO DE ANÁLISE:")
@@ -795,24 +844,34 @@ def main():
         'ETHEREUM': 'ETH-USD',
         'IBOV': '^BVSP',
         'IBOVESPA': '^BVSP',
+        'BOVESPA': '^BVSP',
+        'BVSP': '^BVSP',
         'SP500': '^GSPC',
-        'S&P500': '^GSPC'
+        'S&P500': '^GSPC',
+        'S&P 500': '^GSPC',
+        'DOW': '^DJI',
+        'NASDAQ': '^IXIC'
     }
     
+    # Alternativas para o Ibovespa caso ^BVSP não funcione
+    ibov_alternativas = ['BOVA11.SA', '^BVSP', 'IBOV11.SA']
+    
     if ticker1 in sugestoes:
-        print(f"\n💡 Dica: '{ticker1}' pode não funcionar. Tente '{sugestoes[ticker1]}'")
+        print(f"\n💡 Sugestão: Use '{sugestoes[ticker1]}' ao invés de '{ticker1}'")
+        ticker1 = sugestoes[ticker1]
     if ticker2 in sugestoes:
-        print(f"\n💡 Dica: '{ticker2}' pode não funcionar. Tente '{sugestoes[ticker2]}'")
+        print(f"\n💡 Sugestão: Use '{sugestoes[ticker2]}' ao invés de '{ticker2}'")
+        ticker2 = sugestoes[ticker2]
     
     # Executar análise escolhida
     if escolha == '1':
         # ANÁLISE SIMPLES - PERÍODO ESPECÍFICO
-        executar_analise_simples(ticker1, ticker2)
+        executar_analise_simples(ticker1, ticker2, autoria)
     else:
         # ANÁLISE DE JANELAS MÓVEIS
-        executar_analise_janelas(ticker1, ticker2)
+        executar_analise_janelas(ticker1, ticker2, autoria)
 
-def executar_analise_simples(ticker1, ticker2):
+def executar_analise_simples(ticker1, ticker2, autoria=""):
     """
     Executa análise simples de período específico
     """
@@ -874,7 +933,7 @@ def executar_analise_simples(ticker1, ticker2):
     print(f"Duração: {dias_periodo} dias\n")
     
     try:
-        plotar_comparacao(ticker1, ticker2, data_inicio, data_fim)
+        plotar_comparacao(ticker1, ticker2, data_inicio, data_fim, autoria)
     except Exception as e:
         print(f"\n❌ Erro ao processar dados: {str(e)}")
         print("\n💡 Dicas:")
@@ -885,7 +944,7 @@ def executar_analise_simples(ticker1, ticker2):
         print("   • Alguns ativos podem ter dados limitados")
         print("   • Verifique se há dados disponíveis para o período escolhido")
 
-def executar_analise_janelas(ticker1, ticker2):
+def executar_analise_janelas(ticker1, ticker2, autoria=""):
     """
     Executa análise de janelas móveis
     """
@@ -940,7 +999,7 @@ def executar_analise_janelas(ticker1, ticker2):
     print(f"Janela: {janela_meses} meses\n")
     
     try:
-        plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses)
+        plotar_analise_janelas(ticker1, ticker2, periodo_anos, janela_meses, autoria)
     except Exception as e:
         print(f"\n❌ Erro ao processar dados: {str(e)}")
         import traceback
