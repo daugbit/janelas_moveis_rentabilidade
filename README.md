@@ -95,6 +95,17 @@ Se você receber erros relacionados a `typing.NamedTuple` ou conflitos de depend
 - ✅ Use `ETH-USD` para Ethereum
 - O Yahoo Finance não suporta pares com BRL para criptomoedas
 
+**Problema com ^BVSP (Ibovespa):**
+Se o ticker `^BVSP` não funcionar (erro "delisted" ou "not found"):
+- 🔄 **Alternativa 1**: Use `BOVA11.SA` (ETF que replica o Ibovespa)
+- 🔄 **Alternativa 2**: Tente novamente em alguns minutos (pode ser instabilidade)
+- ℹ️ O Yahoo Finance ocasionalmente tem problemas com índices brasileiros
+
+**Outros índices:**
+- S&P 500: `^GSPC`
+- Dow Jones: `^DJI`
+- Nasdaq: `^IXIC`
+
 ### Versão do Python
 - Certifique-se de estar usando Python 3.8 ou superior
 - Verifique com: `python --version`
@@ -144,6 +155,10 @@ O programa solicitará:
 - `^GSPC` - S&P 500
 - `^DJI` - Dow Jones
 
+**💰 Renda Fixa Brasileira:** ✨ NOVO!
+- `RF-CDI` - CDI acumulado (via Banco Central do Brasil)
+- `RF-POUPANCA` - Poupança (calculado com regras oficiais)
+
 ### ⚠️ IMPORTANTE: Tickers de Criptomoedas
 
 O Yahoo Finance **NÃO** suporta pares BTC-BRL ou ETH-BRL diretamente. 
@@ -168,6 +183,9 @@ Ativo 2: ^BVSP    (Ibovespa já está em BRL)
 COMPARADOR DE ATIVOS FINANCEIROS
 ========================================================
 
+📝 Informações do gráfico (opcional):
+Gráfico elaborado por (Enter para pular): 
+
 📊 ESCOLHA O TIPO DE ANÁLISE:
 
   1️⃣  Análise Simples - Comparação de período específico
@@ -181,6 +199,23 @@ Digite o ticker do ATIVO 2: ^BVSP
 📅 Digite o período de análise (formato: DD/MM/YYYY)
 Data inicial (DD/MM/YYYY): 01/01/2023
 Data final (DD/MM/YYYY) [Enter para hoje]: ↵
+```
+
+### Exemplo de Uso - Comparando com Renda Fixa ✨
+
+```
+Digite o ticker do ATIVO 1: PETR4.SA
+Digite o ticker do ATIVO 2: RF-CDI
+
+💰 Detectado ativo de Renda Fixa Brasileira: RF-CDI
+
+💰 Obtendo dados do CDI (Certificado de Depósito Interbancário)
+  ✓ Cache local encontrado e válido
+  📊 Estatísticas do CDI no período:
+     • Taxa média: 13.65% a.a.
+     • Rentabilidade acumulada: 28.45%
+     • Dias úteis: 504
+     • Valor final (R$ 100k investidos): R$ 128,450.00
 ```
 
 ### Exemplo de Uso - Análise de Janelas Móveis ✨

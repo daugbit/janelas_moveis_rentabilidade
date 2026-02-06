@@ -4,18 +4,38 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+# Importar módulo de renda fixa brasileira
+try:
+    from renda_fixa_br import obter_ativo_renda_fixa
+    RENDA_FIXA_DISPONIVEL = True
+except ImportError:
+    RENDA_FIXA_DISPONIVEL = False
+    print("⚠️  Módulo de renda fixa não disponível")
+
 def obter_dados_ativo(ticker, data_inicio, data_fim):
     """
     Obtém dados históricos de um ativo financeiro
     
     Args:
-        ticker: Símbolo do ativo (ex: 'AAPL', 'PETR4.SA')
+        ticker: Símbolo do ativo (ex: 'AAPL', 'PETR4.SA', 'RF-CDI')
         data_inicio: Data inicial (datetime)
         data_fim: Data final (datetime)
     
     Returns:
         DataFrame com os dados históricos
     """
+    # Verificar se é ativo de renda fixa brasileira
+    if ticker.startswith('RF-'):
+        if not RENDA_FIXA_DISPONIVEL:
+            raise ValueError(
+                "Módulo de renda fixa não está disponível. "
+                "Certifique-se de que o arquivo renda_fixa_br.py está no mesmo diretório."
+            )
+        
+        print(f"\n💰 Detectado ativo de Renda Fixa Brasileira: {ticker}")
+        return obter_ativo_renda_fixa(ticker, data_inicio, data_fim)
+    
+    # Caso contrário, buscar do Yahoo Finance
     try:
         # Download direto dos dados com múltiplas tentativas
         print(f"  Tentando baixar dados de {ticker}...")
@@ -821,6 +841,12 @@ def main():
     print("     ⚠️  Use BTC-USD, não BTC-BRL!")
     print("\n  💱 Índices:")
     print("     ^BVSP (Ibovespa), ^GSPC (S&P 500), ^DJI (Dow Jones)")
+    
+    if RENDA_FIXA_DISPONIVEL:
+        print("\n  💰 Renda Fixa Brasileira (via Banco Central):")
+        print("     RF-CDI (CDI acumulado)")
+        print("     RF-POUPANCA (Poupança)")
+    
     print()
     
     # Solicitar tickers
